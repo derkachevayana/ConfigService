@@ -4,16 +4,17 @@ server:
 spring:
   application:
     name: config-server
-  main:
-    allow-bean-definition-overriding: true
-  profiles:
-    active: native
   cloud:
     config:
-      enabled: true
       server:
-        native:
-          search-locations: classpath:/config/
+        git:
+          uri: https://github.com/derkachevayana/config-repo.git
+          default-label: main
+          clone-on-start: true
+          force-pull: true
+          timeout: 10
+          basedir: /tmp/config-repo
+
 management:
   endpoints:
     web:
@@ -22,3 +23,8 @@ management:
   endpoint:
     health:
       show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.config.server: DEBUG
+    org.springframework.cloud.config.server.git: DEBUG

@@ -1,0 +1,165 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+          predicates:
+            - name: Path
+              args:
+                pattern: "'/api/'+serviceId.toLowerCase()+'/**'"
+          filters:
+            - name: RewritePath
+              args:
+                regexp: "'/api/' + serviceId.toLowerCase() + '/(?<remaining>.*)'"
+                replacement: "'/${remaining}'"
+
+      routes:
+        - id: root-redirect
+          uri: lb://user-service
+          predicates:
+            - Path=/
+          filters:
+            - SetPath=/swagger-ui.html
+
+        - id: user-service-api
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: userService
+                fallbackUri: forward:/fallback/user-service
+            - StripPrefix=1
+
+        - id: notification-service-api
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: notificationService
+                fallbackUri: forward:/fallback/notification-service
+            - StripPrefix=1
+
+        - id: swagger-ui
+          uri: lb://user-service
+          predicates:
+            - Path=/swagger-ui.html, /swagger-ui/**, /webjars/**, /v3/api-docs/**, /api-docs/**
+
+        - id: gateway-actuator
+          uri: http://localhost:${server.port}
+          predicates:
+            - Path=/actuator/**
+
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+        pool:
+          max-connections: 1000
+          max-idle-time: 10000
+
+      metrics:
+        enabled: true
+
+    loadbalancer:
+      retry:
+        enabled: true
+        max-retries: 3
+
+  circuitbreaker:
+    resilience4j:
+      instances:
+        userService:
+          slidingWindowSize: 10
+          minimumNumberOfCalls: 5
+          permittedNumberOfCallsInHalfOpenState: 3
+          automaticTransitionFromOpenToHalfOpenEnabled: true
+          waitDurationInOpenState: 5s
+          failureRateThreshold: 50
+          event-consumer-buffer-size: 10
+        notificationService:
+          slidingWindowSize: 10
+          minimumNumberOfCalls: 5
+          permittedNumberOfCallsInHalfOpenState: 3
+          automaticTransitionFromOpenToHalfOpenEnabled: true
+          waitDurationInOpenState: 5s
+          failureRateThreshold: 50
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+    healthcheck:
+      enabled: true
+    registry-fetch-interval-seconds: 5
+  instance:
+    hostname: discovery-service
+    prefer-ip-address: false
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    metadata-map:
+      zone: primary
+      version: 1.0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,circuitbreakers,refresh
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,POST
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    gateway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+resilience4j:
+  circuitbreaker:
+    metrics:
+      enabled: true
+    logging:
+      enabled: true
+  timelimiter:
+    instances:
+      userService:
+        timeoutDuration: 5s
+      notificationService:
+        timeoutDuration: 5s
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: API Gateway Service
+    version: 1.0.0
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty: INFO
+    com.netflix.discovery: INFO
+    org.springframework.cloud.circuitbreaker: DEBUG
+    io.github.resilience4j: DEBUG

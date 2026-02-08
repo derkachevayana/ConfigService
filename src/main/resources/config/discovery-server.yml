@@ -1,13 +1,49 @@
 server:
   port: 8761
 
+spring:
+  application:
+    name: discovery-server
+
 eureka:
-  client:
-    register-with-eureka: false
-    fetch-registry: false
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-  server:
-    enable-self-preservation: false
-    eviction-interval-timer-in-ms: 5000
-    wait-time-in-ms-when-sync-empty: 0
+  instance:
+    hostname: discovery-service
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+    client:
+      enabled: true
+      register-with-eureka: false
+      fetch-registry: false
+      service-url:
+        defaultZone: http://discovery-service:8761/eureka/
+      healthcheck:
+        enabled: true
+
+    server:
+      enable-self-preservation: false
+      eviction-interval-timer-in-ms: 10000
+      wait-time-in-ms-when-sync-empty: 0
+      response-cache-update-interval-ms: 30000
+
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,metrics,refresh
+    endpoint:
+      health:
+        show-details: always
+
+  info:
+    app:
+      name: ${spring.application.name}
+      description: Eureka Discovery Server
+      version: 1.0.0
+
+  logging:
+    level:
+      root: INFO
+      com.netflix.eureka: INFO
+      org.springframework.cloud: INFO
+      org.springframework.cloud.netflix.eureka: WARN
